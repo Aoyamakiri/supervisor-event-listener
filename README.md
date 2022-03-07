@@ -3,7 +3,7 @@
 
 在config配置中添加你的邮箱即可
 
-#### supervisor的配置例子如下
+### supervisor的配置例子如下
 ```
 [eventlistener:listener]
 command=python /yourpath/listener.py
