@@ -1,5 +1,3 @@
-import time
-import string
 import smtplib
 from email.mime.text import MIMEText
 from email.utils import formataddr
@@ -22,24 +20,7 @@ class Mail:
         self.smtp.connect(self.smtp_server, self.smtp_port)
         self.smtp.login(self.smtp_username, self.smtp_password)
 
-    def format_data(self, data) -> string:
-        try:
-            data = data.split(' ')
-            processname = data[0].split(':')[1]
-            groupname = data[1].split(':')[1]
-            from_state = data[2].split(':')[1]
-            now = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
-            return '进程名: ' + processname + '\n进程组名: ' + groupname + '\n当前进程状态: ' + from_state + '\n时间: ' + now
-        except:
-            return data
-
-    def send(self, data, explanation=None, is_format_data=True) -> None:
-        if is_format_data is True:
-            data = self.format_data(data)
-
-        if explanation is not None:
-            data = data + '\n\n说明: ' + explanation
-
+    def send(self, data) -> None:
         message = MIMEText(data, 'plain', 'utf-8')
         message['Subject'] = self.subject
         message['From'] = formataddr([self.from_nickname, self.from_addr])

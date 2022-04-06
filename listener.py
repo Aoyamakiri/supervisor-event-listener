@@ -1,78 +1,65 @@
 import sys
-from mail import Mail
-
-global headers, data
+from timer_thread import TimerThread
+from global_variable_pool import data_buffer, thread_lock
 
 
 class Listener:
+    READY = 'READY\n'
+    RESULT = 'RESULT '
+
     def __init__(self) -> None:
         self.stdin = sys.stdin
         self.stdout = sys.stdout
         self.stderr = sys.stderr
 
-    def success(self) -> None:
-        self.stdout.write('RESULT 2\nOK')
+    def ready(self) -> None:
+        self.stdout.write(self.READY)
         self.stdout.flush()
+
+    def success(self) -> None:
+        self.stdout_send('OK')
 
     def fail(self) -> None:
-        self.stdout.write('RESULT 4\nFAIL')
+        self.stdout_send('FAIL')
+
+    def stdout_send(self, send_data) -> None:
+        result_length = len(send_data)
+        result = '%s%s\n%s' % (self.RESULT, str(result_length), send_data)
+        self.stdout.write(result)
         self.stdout.flush()
 
-    def run(self, callback) -> None:
-        global headers, data
+    def run(self) -> None:
         while True:
-            self.stdout.write('READY\n')
-            self.stdout.flush()
+            self.ready()
 
             line = self.stdin.readline()
-            headers = dict([x.split(':') for x in line.split()])
-            data = self.stdin.read(int(headers['len']))
+            header = dict([x.split(':') for x in line.split()])
+            payload = self.stdin.read(int(header['len']))
 
-            try:
-                callback()
-                self.success()
-            except:
-                self.fail()
+            thread_lock.acquire()
+            data_buffer.append({'header': header, 'payload': payload})
+            thread_lock.release()
+
+            self.success()
 
 
 if __name__ == '__main__':
-    def logic():
-        global headers, data
-        # TODO
-        config = {
-            'smtp_server': '', # 邮件服务器域名
-            'smtp_port': 465, # 邮件服务器端口
-            'smtp_username': '', # 邮件服务器用户名
-            'smtp_password': '', # 邮件服务器密码
+    delay = 60  # 延迟多少秒后发送
+    config = {
+        'smtp_server': '',  # 邮件服务器域名
+        'smtp_port': 465,  # 邮件服务器端口
+        'smtp_username': '',  # 邮件服务器用户名
+        'smtp_password': '',  # 邮件服务器密码
 
-            'subject': '进程状态更改', # 邮件主题
-            'from_nickname': '', # 发送者昵称
-            'from_addr': '', # 发送者地址
-            'to_nickname': '', # 接收者昵称
-            'to_addr': '', # 接收者地址
-        }
+        'subject': '进程状态通知',  # 邮件主题
+        'from_nickname': '',  # 发送者昵称
+        'from_addr': '',  # 发送者地址
+        'to_nickname': '',  # 接收者昵称
+        'to_addr': '',  # 接收者地址
+    }
 
-        event_name = headers['eventname']
-        if event_name == 'PROCESS_STATE_EXITED':  # 进程已从RUNNING状态转移到EXITED状态 即被kill
-            config['subject'] = '进程终止'
-            explanation = '进程已从 「正在运行」 状态转移到 「退出」 状态'
-        elif event_name == 'PROCESS_STATE_STARTING':  # 进程已转移到STARTING状态
-            config['subject'] = '进程正在启动'
-            explanation = '进程已从之前的任何状态转移到 「正在启动」 状态'
-        elif event_name == 'PROCESS_STATE_RUNNING':  # 进程已从STARTING状态转移到RUNNING状态 即成功启动
-            config['subject'] = '进程启动成功'
-            explanation = '进程已从 「正在启动」 状态转移到 「启动完成」 状态'
-        elif event_name == 'PROCESS_STATE_BACKOFF':  # 进程已从STARTING状态转移到BACKOFF状态
-            config['subject'] = '进程启动失败'
-            explanation = '进程已从 「正在启动」 状态转移到 「启动失败」 状态'
-        elif event_name == 'PROCESS_STATE_FATAL':  # 进程已从BACKOFF状态移动到FATAL状态 即多次未成功启动进程 并放弃尝试重新启动它
-            config['subject'] = '进程无法启动'
-            explanation = '进程多次未能成功启动 已放弃尝试重新启动它'
-        else:
-            explanation = '事件名称: ' + event_name
-
-        mail = Mail(config)
-        mail.send(data, explanation)
-
+    timer_thread = TimerThread(1, 'timer', delay, config)
+    timer_thread.setDaemon(True)
+    timer_thread.start()
     listener = Listener()
-    listener.run(logic)
+    listener.run()
